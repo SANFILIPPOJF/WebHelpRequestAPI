@@ -1,15 +1,14 @@
 // imports
 const { Client } = require('pg');
-const fs = require('fs'); // permet a node de lire des fichiers
 const express = require('express');
-const { log } = require('console');
+require('dotenv').config()
 
 // declarations
 const client = new Client({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'HelpRequestAPI',
-    password: 'mdp',
+    user: process.env.DB_USERNAME,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME, 
+    password: process.env.DB_PASSWORD,
     port: 5432,
 });
 
@@ -48,7 +47,7 @@ app.get('/api/tickets', async (req, res) => {
         res.status(200).json({ status: "success", data: data.rows })
     }
     catch (err) {
-        res.status(400).json({ status: "fail", data: "Erreur serveur" })
+        res.status(500).json({ status: "fail", data: "Erreur serveur" })
     }
 })
 
@@ -75,7 +74,7 @@ app.get('/api/tickets/:id', async (req, res) => {
 
     }
     catch (err) {
-        res.status(400).json({ status: "fail", data: "Erreur serveur" })
+        res.status(500).json({ status: "fail", data: "Erreur serveur" })
     }
 
 })
@@ -84,8 +83,8 @@ app.post('/api/tickets', async (req, res) => {
     const message = req.body.message;
     const user_id = parseInt(req.body.user_id);
 
-    if (req.body.message.length === 0 || isNAN(req.body.user_id)) {
-        res.status(412).json({ status: "fail", data: "content or user_id uncorrect" })
+    if (message.length == 0 || isNaN(user_id)) {
+        res.status(412).json({ status: "fail", data: "message vide ou user_id incorrect" })
         return;
     }
     try {
@@ -94,7 +93,7 @@ app.post('/api/tickets', async (req, res) => {
     }
 
     catch (err) {
-        res.status(400).json({ status: "fail", data: "Erreur serveur" })
+        res.status(500).json({ status: "fail", data: "Erreur serveur" })
     }
 })
 
@@ -102,7 +101,7 @@ app.post('/api/tickets', async (req, res) => {
 app.delete('/api/tickets/:id', async (req, res) => {
     const id_ticket = parseInt(req.params.id);
 
-    if (isNan(id_ticket)) {
+    if (isNaN(id_ticket)) {
         res.status(406).json({ status: "fail", data: "Parametres incorrects" })
 
         return;
@@ -111,33 +110,40 @@ app.delete('/api/tickets/:id', async (req, res) => {
         const data = await client.query('DELETE FROM tickets WHERE id_ticket = $1', [id_ticket]);
         if (data.rowCount === 1) {
             res.status(202).json({ status: "success", data: "Ticket supprimé" })
+            return;
         }
-        else {
-            res.status(404).json({ status: "fail", data: "Ticket introuvable" })
-        }
+        res.status(404).json({ status: "fail", data: "Ticket introuvable" })
+
     } catch (error) {
-        res.status(400).json({ status: "fail", data: "Erreur serveur" })
+        res.status(500).json({ status: "fail", data: "Erreur serveur" })
     }
 })
 
 // update ticket
 app.put('/api/tickets/:id', async (req, res) => {
-    const id = req.params.id;
-    const ticket = await client.query('SELECT * FROM tickets WHERE id_ticket = $1', [id]);
-    if (ticket.rowCount === 1) {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+        res.status(406).json({ status: "fail", data: "Parametres incorrects" })
+
+        return;
+    }
+    try {
+        const ticket = await client.query('SELECT * FROM tickets WHERE id_ticket = $1', [id]);
+
+        if (ticket.rowCount === 0) {
+            res.status(404).json({ status: "fail", data: "Ticket introuvable" })
+            return;
+        }
         const data = await client.query('UPDATE tickets SET done = $2 WHERE id_ticket = $1', [id, !ticket.rows[0].done]);
         if (data.rowCount === 1) {
-            res.json({ update: true })
+            res.status(202).json({ status: "success"})
+            return;
         }
-        else {
-            res.json({ update: false })
-        }
+        res.status(404).json({ status: "fail", data: "Ticket impossible à modifier" })
     }
-    else {
-        res.json({ done: false })
+    catch (err) {
+        res.status(500).json({ status: "fail", data: "Erreur serveur" })
     }
-
-
 })
 
 // ecoute le port 8000
